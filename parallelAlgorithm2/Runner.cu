@@ -3,14 +3,19 @@
 cudaError_t error = cudaSuccess;
 cudaDeviceProp deviceProp = cudaDeviceProp();
 
+constexpr unsigned int THREADS_PER_BLOCK = 256;
+
 void testAdding2Vectors();
 void testAddingNVectors();
 
 
-__global__ void add2VectorsKernel(double *resultVector, const double *vectorA, const double *vectorB)
+__global__ void add2VectorsKernel(double *resultVector, const double *vectorA, const double *vectorB, const unsigned int lenght)
 {
-	int i = threadIdx.x;
-	resultVector[i] = vectorA[i] + vectorB[i];
+	int offset = threadIdx.x + blockIdx.x * THREADS_PER_BLOCK;
+	
+	while (offset < lenght) {
+		resultVector[offset] = vectorA[offset] + vectorB[offset];
+	}
 }
 
 __global__ void addNVectorsKernel(double *resultVector, const double *vectorsArray, const int* n)
@@ -39,6 +44,8 @@ void testAdding2Vectors () {
 	double* devA = 0;
 	double* devB = 0;
 	double* devResult = 0;
+	
+	cudaEvent_y startEvent
 
 	error = cudaMalloc((void**)&devA, dimmensions * sizeof(double));
 	if (error != cudaSuccess) {
