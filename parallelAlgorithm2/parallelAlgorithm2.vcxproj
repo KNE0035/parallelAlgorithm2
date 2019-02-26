@@ -12,6 +12,7 @@
   </ItemGroup>
   <ItemGroup>
     <CudaCompile Include="Runner.cu" />
+    <CudaCompile Include="Runner2.cu" />
   </ItemGroup>
   <PropertyGroup Label="Globals">
     <ProjectGuid>{5BEC2694-9117-4638-8715-0BBDC3E598D5}</ProjectGuid>
