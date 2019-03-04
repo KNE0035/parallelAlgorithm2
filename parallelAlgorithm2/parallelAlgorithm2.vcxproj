@@ -14,6 +14,14 @@
     <CudaCompile Include="Runner.cu" />
     <CudaCompile Include="Runner2.cu" />
   </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="main.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="cudaUtils.cuh" />
+    <ClInclude Include="Runner.cuh" />
+    <ClInclude Include="Runner2.cuh" />
+  </ItemGroup>
   <PropertyGroup Label="Globals">
     <ProjectGuid>{5BEC2694-9117-4638-8715-0BBDC3E598D5}</ProjectGuid>
     <RootNamespace>TemplateProject2017</RootNamespace>
