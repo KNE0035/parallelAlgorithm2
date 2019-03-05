@@ -3,6 +3,7 @@
   <ItemGroup>
     <CudaCompile Include="Runner.cu" />
     <CudaCompile Include="Runner2.cu" />
+    <CudaCompile Include="Runner3.cu" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="main.cpp" />
@@ -20,6 +21,9 @@
       <Filter>cuh</Filter>
     </ClInclude>
     <ClInclude Include="cudaUtils.cuh">
+      <Filter>cuh</Filter>
+    </ClInclude>
+    <ClInclude Include="Runner3.cuh">
       <Filter>cuh</Filter>
     </ClInclude>
   </ItemGroup>

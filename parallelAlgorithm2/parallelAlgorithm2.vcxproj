@@ -11,8 +11,11 @@
     </ProjectConfiguration>
   </ItemGroup>
   <ItemGroup>
-    <CudaCompile Include="Runner.cu" />
+    <CudaCompile Include="Runner.cu">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
+    </CudaCompile>
     <CudaCompile Include="Runner2.cu" />
+    <CudaCompile Include="Runner3.cu" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="main.cpp" />
@@ -21,6 +24,7 @@
     <ClInclude Include="cudaUtils.cuh" />
     <ClInclude Include="Runner.cuh" />
     <ClInclude Include="Runner2.cuh" />
+    <ClInclude Include="Runner3.cuh" />
   </ItemGroup>
   <PropertyGroup Label="Globals">
     <ProjectGuid>{5BEC2694-9117-4638-8715-0BBDC3E598D5}</ProjectGuid>
