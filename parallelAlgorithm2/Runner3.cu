@@ -21,16 +21,14 @@ __host__ float3 *createData(const unsigned int length)
 {
 	random_device rd;
 	mt19937_64 mt(rd());
-	uniform_int_distribution<float> dist(0.0f, 1.0f);
+	uniform_real_distribution<float> dist(0.0, 1.0);
 
 	float3 *data = static_cast<float3*>(::operator new(sizeof(float3)* length));
 
 	for (unsigned int i = 0; i < length; i++) {
-		//data[i] = make_float3(dist(mt), dist(mt), dist(mt));
-		data[i] = make_float3(1.0f, 1.0f, 1.0f);
+		data[i] = make_float3(dist(mt), dist(mt), dist(mt));
+		//data[i] = make_float3(1.0f, 1.0f, 1.0f);
 	}
-
-	//TODO: Generate float3 vectors. You can use 'make_float3' method.
 	return data;
 }
 
@@ -51,56 +49,39 @@ void printData(const float3 *data, const unsigned int length)
 /// <param name="noForces">   	The number of forces. </param>
 /// <param name="dFinalForce">	[in,out] If non-null, the final force. </param>
 ////////////////////////////////////////////////////////////////////////////////////////////////////
-extern void reduce(const float3 * __restrict__ dForces, const unsigned int noForces, float3* __restrict__ dFinalForce)
+__global__ void reduce(const float3 * __restrict__ dForces, const unsigned int noForces, float3* __restrict__ dFinalForce)
 {
-	
-	
 	__shared__ float3 sForces[TPB];		//SEE THE WARNING MESSAGE !!!
 	unsigned int tid = threadIdx.x;
 	unsigned int next = TPB;			//SEE THE WARNING MESSAGE !!!
-	
 	float3 * src = &sForces[tid];
-	float3 * src2 = (float3*)&sForces[tid + next];
+	*src = dForces[tid];
+	float3 * src2 = (float3*)&dForces[tid + next];
 
-	#pragma unroll
-	for (unsigned int s = (blockDim.x >> 1); s>32; s >>= 1)
+	#pragma unroll MEM_BLOCKS_PER_THREAD_BLOCK
+	for (next; next > 32; next >>= 1)
 	{
-		if (tid >= s) return;
-
+		if (tid >= next) return;
 		src->x += src2->x;
 		src->y += src2->y;
 		src->z += src2->z;
-		src2 = src + s;
+		//printf("%d\n", next);
+		src2 = src + (next >> 1);
 		__syncthreads();
 	}
+	if (tid >= next) return;
 
 	volatile float3 *vsrc = &sForces[tid];
+	volatile float3 *vsrc2;
 
-	if (tid < 32)
+	#pragma unroll MEM_BLOCKS_PER_THREAD_BLOCK
+	for (next; next > 0; next >>= 1)
 	{
-		vsrc[tid].x += vsrc[tid + 32].x;
-		vsrc[tid].y += vsrc[tid + 32].y;
-		vsrc[tid].z += vsrc[tid + 32].z;
-
-		vsrc[tid].x += vsrc[tid + 16].x;
-		vsrc[tid].y += vsrc[tid + 16].y;
-		vsrc[tid].z += vsrc[tid + 16].z;
-
-		vsrc[tid].x += vsrc[tid + 8].x;
-		vsrc[tid].y += vsrc[tid + 8].y;
-		vsrc[tid].z += vsrc[tid + 8].z;
-
-		vsrc[tid].x += vsrc[tid + 4].x;
-		vsrc[tid].y += vsrc[tid + 4].y;
-		vsrc[tid].z += vsrc[tid + 4].z;
-
-		vsrc[tid].x += vsrc[tid + 2].x;
-		vsrc[tid].y += vsrc[tid + 2].y;
-		vsrc[tid].z += vsrc[tid + 2].z;
-
-		vsrc[tid].x += vsrc[tid + 1].x;
-		vsrc[tid].y += vsrc[tid + 1].y;
-		vsrc[tid].z += vsrc[tid + 1].z;
+		if (tid >= next) return;
+		vsrc2 = vsrc + next;
+		vsrc->x += vsrc2->x;
+		vsrc->y += vsrc2->y;
+		vsrc->z += vsrc2->z;
 	}
 
 	dFinalForce->x = vsrc->x;
@@ -116,7 +97,22 @@ extern void reduce(const float3 * __restrict__ dForces, const unsigned int noFor
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 __global__ void add(const float3* __restrict__ dFinalForce, const unsigned int noRainDrops, float3* __restrict__ dRainDrops)
 {
-	//TODO: Add the FinalForce to every Rain drops position.
+	float3 finalForce = *dFinalForce;
+	unsigned int offset = blockDim.x;
+	unsigned int index = MEM_BLOCKS_PER_THREAD_BLOCK * blockIdx.x * offset + threadIdx.x;
+
+	float3* ptr = &dRainDrops[index];
+
+	#pragma unroll MEM_BLOCKS_PER_THREAD_BLOCK
+	for (unsigned int i = 0; i < MEM_BLOCKS_PER_THREAD_BLOCK; i++)
+	{
+		if (index >= noRainDrops) return;
+		ptr->x += finalForce.x;
+		ptr->y += finalForce.y;
+		ptr->z += finalForce.z;
+		ptr += offset;
+		index += offset;
+	}
 }
 
 
@@ -148,20 +144,23 @@ int particleSystemSimulation()
 
 	KernelSetting ksReduce;
 
-	//TODO: ... Set ksReduce
-
+	ksReduce.dimBlock = dim3(TPB, 1, 1);
+	ksReduce.dimGrid = dim3(1, 1, 1);
 
 	KernelSetting ksAdd;
-	//TODO: ... Set ksAdd
+	ksAdd.dimBlock = dim3(TPB, 1, 1);
+	ksAdd.dimGrid = dim3(getNumberOfParts(NO_RAIN_DROPS, TPB*MEM_BLOCKS_PER_THREAD_BLOCK), 1, 1);
 	
+	//printData(hForces, NO_FORCES);
+
+	reduce << <ksReduce.dimGrid, ksReduce.dimBlock >> > (dForces, NO_FORCES, dFinalForce);
 	for (unsigned int i = 0; i<1000; i++)
 	{
-		reduce<<<ksReduce.dimGrid, ksReduce.dimBlock>>>(dForces, NO_FORCES, dFinalForce);
 		add<<<ksAdd.dimGrid, ksAdd.dimBlock>>>(dFinalForce, NO_RAIN_DROPS, dDrops);
 	}
 
 	checkDeviceMatrix<float>((float*)dFinalForce, sizeof(float3), 1, 3, "%5.2f ", "Final force");
-	// checkDeviceMatrix<float>((float*)dDrops, sizeof(float3), NO_RAIN_DROPS, 3, "%5.2f ", "Final Rain Drops");
+	checkDeviceMatrix<float>((float*)dDrops, sizeof(float3), NO_RAIN_DROPS, 3, "%5.2f ", "Final Rain Drops");
 
 	if (hForces)
 		free(hForces);
