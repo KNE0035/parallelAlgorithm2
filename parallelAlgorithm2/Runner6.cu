@@ -37,8 +37,8 @@ __constant__  int SOBEL_Y_FILTER[] = { 1, 2, 1, 0, 0, 0, -1, -2, -1 };
 template<bool normalizeTexel>__global__ void floatHeighmapTextureToNormalmap(const unsigned int texWidth, const unsigned int texHeight, const unsigned int dstPitch, uchar3* dst)
 {
 
-	unsigned int col = (threadIdx.x + blockIdx.x * blockDim.x) % texWidth;
-	unsigned int row = (threadIdx.y + blockIdx.y * blockDim.y) % texHeight;
+	unsigned int col = (threadIdx.x + blockIdx.x * blockDim.x);
+	unsigned int row = (threadIdx.y + blockIdx.y * blockDim.y);
 
 	float x = 0, y = 0, z = 0;
 
