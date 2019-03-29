@@ -1,6 +1,9 @@
-// includes, cudaimageWidth
+// includes, cuda
+#include <cuda_runtime.h>
+
 #include <cudaDefs.h>
 #include <imageManager.h>
+
 
 #include "imageKernels.cuh"
 
@@ -9,61 +12,69 @@
 cudaError_t error = cudaSuccess;
 cudaDeviceProp deviceProp = cudaDeviceProp();
 
-//Use the followings to store information about the input image that will be processed
-unsigned char *dSrcImageData = 0;
-unsigned int srcImageWidth;
-unsigned int srcImageHeight;
-unsigned int srcImageBPP;		//Bits Per Pxel = 8, 16, 24, or 32 bit
-unsigned int srcImagePitch;
+texture<float, 2, cudaReadModeElementType> texRef;
+cudaChannelFormatDesc texChannelDesc;
 
-//Use the followings to access the input image through the texture reference
-texture<float, 2, cudaReadModeElementType> srcTexRef;
-cudaChannelFormatDesc srcTexCFD;
-size_t srcTexPitch;
-float *dSrcTexData = 0;
+unsigned char *dImageData = 0;
+unsigned int imageWidth;
+unsigned int imageHeight;
+unsigned int imageBPP;		//Bits Per Pixel = 8, 16, 24, or 32 bit
+unsigned int imagePitch;
 
-size_t dstTexPitch;
-uchar3 *dstTexData = 0;
+size_t texPitch;
+float *dLinearPitchTextureData = 0;
+cudaArray *dArrayTextureData = 0;
 
-KernelSetting squareKs;
+uchar3 *dstTexData;
+
+KernelSetting squareKs;;
+
 float *dOutputData = 0;
+
+__constant__  int SOBEL_X_FILTER[] = { -1, 0, 1, -2, 0, 2, -1, 0, 1 };
+__constant__  int SOBEL_Y_FILTER[] = { 1, 2, 1, 0, 0, 0, -1, -2, -1 };
 
 template<bool normalizeTexel>__global__ void floatHeighmapTextureToNormalmap(const unsigned int texWidth, const unsigned int texHeight, const unsigned int dstPitch, uchar3* dst)
 {
-	__constant__ unsigned int* SOBEL_X_FILTER = {-1, 0, 1, -2, 0, 2, -1, 0, 1};
-	__constant__ unsigned int* SOBEL_Y_FILTER = {1, 2, 1, 0, 0, 0, -1, -2, -1};
 
-	unsigned int threadIdx = threadIdx.x + blockIdx.x * blockDim.x;
-	unsigned int threadIdy = threadIdx.y + blockIdx.y * blockDim.y;
+	unsigned int col = (threadIdx.x + blockIdx.x * blockDim.x) % texWidth;
+	unsigned int row = (threadIdx.y + blockIdx.y * blockDim.y) % texHeight;
 
-	float x, y, z = 0;
+	float x = 0, y = 0, z = 0;
 
 	z = 0.5;
 
-	unsigned int index = threadIdx + threadIdy * dstPitch;
+	unsigned int offset = col + row * (dstPitch / 3);
+	
 	for (unsigned int i = 0; i < 3; i++) {
 		for (unsigned int j = 0; j < 3; j++) {
-			x += tex2D(dSrcTexData, threadIdx + (j - 1), threadIdy + (i - 1)) * SOBEL_X_FILTER[j + i * 3];
-			y += tex2D(dSrcTexData, threadIdx + (j - 1), threadIdy + (i - 1)) * SOBEL_Y_FILTER[j + i * 3];
+			float texel = tex2D(texRef, col + (j - 1), row + (i - 1));
+			x += texel * SOBEL_X_FILTER[j + i * 3];
+			y += texel * SOBEL_Y_FILTER[j + i * 3];
 		}
 	}
+	x = x / 9;
+	y = y / 9;
+ 
+	if (normalizeTexel) {
+		float distance = sqrt(x * x + y * y + z * z);
+		x /= distance;
+		y /= distance;
+		z /= distance;
+	}
 
-	x /= 9;
-	y /= 9;
+	uchar3 rgbTexel;
+	uchar3 bgrTexel;
+	rgbTexel.x = (x + 1) * 127.5;
+	rgbTexel.y = (y + 1) * 127.5;
+	rgbTexel.z = z * 255;
+	//printf("%u, %u, %u \n", texel.x, texel.y, texel.z);
 
-	float distance = sqrt(x * x + y * y + z * z);
+	bgrTexel.x = rgbTexel.z;
+	bgrTexel.y = rgbTexel.y;
+	bgrTexel.z = rgbTexel.x;
 
-	x /= distance;
-	y /= distance;
-	z /= distance;
-
-	uchar3 texel;
-
-	texel.x = (x + 1) * 127.5;
-	texel.y = y * 255;
-	texel.z = (z + 1) * 127.5;
-
-	dst[index] = texel;
+	dst[offset] = rgbTexel;
 }
 
 #pragma region STEP 1
@@ -75,16 +86,16 @@ void loadSourceImage(const char* imageFileName)
 	FreeImage_Initialise();
 	FIBITMAP *tmp = ImageManager::GenericLoader(imageFileName, 0);
 
-	srcImageWidth = FreeImage_GetWidth(tmp);
-	srcImageHeight = FreeImage_GetHeight(tmp);
-	srcImageBPP = FreeImage_GetBPP(tmp);
-	srcImagePitch = FreeImage_GetPitch(tmp);		// FREEIMAGE aligns row data ... You have to use pitch instead of width
+	imageWidth = FreeImage_GetWidth(tmp);
+	imageHeight = FreeImage_GetHeight(tmp);
+	imageBPP = FreeImage_GetBPP(tmp);
+	imagePitch = FreeImage_GetPitch(tmp);		// FREEIMAGE aligns row data ... You have to use pitch instead of width
 
-	cudaMalloc((void**)&dSrcImageData, srcImagePitch * srcImageHeight * srcImageBPP / 8);
-	cudaMemcpy(dSrcImageData, FreeImage_GetBits(tmp), srcImagePitch * srcImageHeight * srcImageBPP / 8, cudaMemcpyHostToDevice);
+	cudaMalloc((void**)&dImageData, imagePitch * imageHeight * imageBPP / 8);
+	cudaMemcpy(dImageData, FreeImage_GetBits(tmp), imagePitch * imageHeight * imageBPP / 8, cudaMemcpyHostToDevice);
 
-	checkHostMatrix<unsigned char>(FreeImage_GetBits(tmp), srcImagePitch, srcImageHeight, srcImageWidth, "%hhu ", "Result of Linear Pitch Text");
-	checkDeviceMatrix<unsigned char>(dSrcImageData, srcImagePitch, srcImageHeight, srcImageWidth, "%hhu ", "Result of Linear Pitch Text");
+	//checkHostMatrix<unsigned char>(FreeImage_GetBits(tmp), imagePitch, imageHeight, imageWidth, "");
+	//checkDeviceMatrix<unsigned char>(dImageData, imagePitch, imageHeight, imageWidth, "", "");
 
 	FreeImage_Unload(tmp);
 	FreeImage_DeInitialise();
@@ -98,23 +109,28 @@ void loadSourceImage(const char* imageFileName)
 
 void createSrcTexure()
 {
-	//TODO: Floating Point Texture Data
-	//cudaMallocPitch( ...);
+	//Floating Point Texture Data
+	cudaMallocPitch((void**)&dLinearPitchTextureData, &texPitch, imageWidth * sizeof(float), imageHeight);
 
 	//Converts custom image data to float and stores result in the float_pitch_linear_data
-	switch (srcImageBPP)
+	switch (imageBPP)
 	{
-	case 8:  colorToFloat<8, 2> << <squareKs.dimGrid, squareKs.dimBlock >> >(dSrcImageData, srcImageWidth, srcImageHeight, srcImagePitch, srcTexPitch / sizeof(float), dSrcTexData); break;
-	case 16: colorToFloat<16, 2> << <squareKs.dimGrid, squareKs.dimBlock >> >(dSrcImageData, srcImageWidth, srcImageHeight, srcImagePitch, srcTexPitch / sizeof(float), dSrcTexData); break;
-	case 24: colorToFloat<24, 2> << <squareKs.dimGrid, squareKs.dimBlock >> >(dSrcImageData, srcImageWidth, srcImageHeight, srcImagePitch, srcTexPitch / sizeof(float), dSrcTexData); break;
-	case 32: colorToFloat<32, 2> << <squareKs.dimGrid, squareKs.dimBlock >> >(dSrcImageData, srcImageWidth, srcImageHeight, srcImagePitch, srcTexPitch / sizeof(float), dSrcTexData); break;
+	case 8:  colorToFloat<8, 2> << <squareKs.dimGrid, squareKs.dimBlock >> > (dImageData, imageWidth, imageHeight, imagePitch, texPitch / sizeof(float), dLinearPitchTextureData); break;
+	case 16: colorToFloat<16, 2> << <squareKs.dimGrid, squareKs.dimBlock >> > (dImageData, imageWidth, imageHeight, imagePitch, texPitch / sizeof(float), dLinearPitchTextureData); break;
+	case 24: colorToFloat<24, 2> << <squareKs.dimGrid, squareKs.dimBlock >> > (dImageData, imageWidth, imageHeight, imagePitch, texPitch / sizeof(float), dLinearPitchTextureData); break;
+	case 32: colorToFloat<32, 2> << <squareKs.dimGrid, squareKs.dimBlock >> > (dImageData, imageWidth, imageHeight, imagePitch, texPitch / sizeof(float), dLinearPitchTextureData); break;
 	}
-	checkDeviceMatrix<float>(dSrcTexData, srcTexPitch, srcImageHeight, srcImageWidth, "%6.1f ", "Result of Linear Pitch Text");
 
-	//TODO: Texture settings
+	//checkDeviceMatrix<float>(dLinearPitchTextureData, texPitch, imageHeight, imageWidth, "", "");
 
-	//TODO: Bind texture
-	//cudaBindTexture2D(...);
+	//Texture settings
+	texChannelDesc = cudaCreateChannelDesc(32, 0, 0, 0, cudaChannelFormatKindFloat);
+	texRef.normalized = false;
+	texRef.filterMode = cudaFilterModePoint;
+	texRef.addressMode[0] = cudaAddressModeClamp;
+	texRef.addressMode[1] = cudaAddressModeClamp;
+
+	cudaBindTexture2D(0, &texRef, dLinearPitchTextureData, &texChannelDesc, imageWidth, imageHeight, texPitch);
 }
 #pragma endregion
 
@@ -124,15 +140,14 @@ void createSrcTexure()
 
 void createNormalMap()
 {
-
+	size_t pitch;
 	//TODO: Allocate Pitch memory dstTexData to store output texture
-	cudaMallocPitch((void**)dSrcTexData, &dstTexPitch, srcImageWidth, srcImageHeight);
+	checkCudaErrors(cudaMallocPitch((void**)&dstTexData, &texPitch, imageWidth * 3, imageHeight));
 
 	//TODO: Call the kernel that creates the normal map.
-	floatHeighmapTextureToNormalmap<true><<<squareKs.dimGrid, squareKs.dimBlock>>>();
-	const unsigned int texWidth, const unsigned int texHeight, const unsigned int dstPitch, uchar3* dst
+	floatHeighmapTextureToNormalmap<true> << <squareKs.dimGrid, squareKs.dimBlock>> >(imageWidth, imageHeight, texPitch, dstTexData);
 
-	check_data<uchar3>::checkDeviceMatrix(dstTexData, srcImageHeight, dstTexPitch / sizeof(uchar3), true, "%hhu %hhu %hhu %hhu | ", "Result of Linear Pitch Text");
+	//check_data<uchar3>::checkDeviceMatrix(dstTexData, imageHeight, texPitch / sizeof(uchar3), true, "%hhu %hhu %hhu | ", "Result of Linear Pitch Text");
 }
 
 #pragma endregion
@@ -145,9 +160,9 @@ void saveTexImage(const char* imageFileName)
 {
 	FreeImage_Initialise();
 
-	FIBITMAP *tmp = FreeImage_Allocate(srcImageWidth, srcImageHeight, 24);
-	unsigned int tmpPitch = srcImagePitch = FreeImage_GetPitch(tmp);		// FREEIMAGE align row data ... You have to use pitch instead of width
-	checkCudaErrors(cudaMemcpy2D(FreeImage_GetBits(tmp), FreeImage_GetPitch(tmp), dstTexData, dstTexPitch, srcImageWidth * 3, srcImageHeight, cudaMemcpyDeviceToHost));
+	FIBITMAP *tmp = FreeImage_Allocate(imageWidth, imageHeight, 24);
+	unsigned int tmpPitch = imagePitch = FreeImage_GetPitch(tmp);		// FREEIMAGE align row data ... You have to use pitch instead of width
+	checkCudaErrors(cudaMemcpy2D(FreeImage_GetBits(tmp), FreeImage_GetPitch(tmp), dstTexData, texPitch, imageWidth * 3, imageHeight, cudaMemcpyDeviceToHost));
 	//FreeImage_Save(FIF_PNG, tmp, imageFileName, 0);
 	ImageManager::GenericWriter(tmp, imageFileName, FIF_PNG);
 	FreeImage_Unload(tmp);
@@ -158,13 +173,13 @@ void saveTexImage(const char* imageFileName)
 
 void releaseMemory()
 {
-	cudaUnbindTexture(srcTexRef);
-	if (dSrcImageData != 0)
-		cudaFree(dSrcImageData);
-	if (dSrcTexData != 0)
-		cudaFree(dSrcTexData);
-	if (dstTexData != 0)
-		cudaFree(dstTexData);
+	cudaUnbindTexture(texRef);
+	if (dImageData != 0)
+		cudaFree(dImageData);
+	if (dLinearPitchTextureData != 0)
+		cudaFree(dLinearPitchTextureData);
+	if (dArrayTextureData)
+		cudaFreeArray(dArrayTextureData);
 	if (dOutputData)
 		cudaFree(dOutputData);
 }
@@ -174,12 +189,12 @@ int main(int argc, char *argv[])
 	initializeCUDA(deviceProp);
 
 	//STEP 1
-	loadSourceImage("C:/Users\kne0035/dev/parallelAlgorithm2/parallelAlgorithm2/images/terrain3Kx3K.tif");
+	loadSourceImage("C:/Users/kne0035/dev/projects/parallelAlgorithm2/parallelAlgorithm2/images/terrain3Kx3K.tif");
 
 	//TODO: Setup the kernel settings
 	squareKs.dimBlock = dim3(BLOCK_DIM, BLOCK_DIM, 1);
 	squareKs.blockSize = BLOCK_DIM * BLOCK_DIM;
-	squareKs.dimGrid = dim3((srcImageWidth + BLOCK_DIM - 1) / BLOCK_DIM, (srcImageHeight + BLOCK_DIM - 1) / BLOCK_DIM, 1);
+	squareKs.dimGrid = dim3((imageWidth + BLOCK_DIM - 1) / BLOCK_DIM, (imageHeight + BLOCK_DIM - 1) / BLOCK_DIM, 1);
 
 	//Step 2 - create heighmap texture stored in the linear pitch memory
 	createSrcTexure();
@@ -188,7 +203,7 @@ int main(int argc, char *argv[])
 	createNormalMap();
 
 	//Step 4 - save the normal map
-	saveTexImage("C:/Users\kne0035/dev/parallelAlgorithm2/parallelAlgorithm2/images/noramlMap.bmp");
+	saveTexImage("C:/Users/kne0035/dev/projects/parallelAlgorithm2/parallelAlgorithm2/images/normalMap.bmp");
 
 	releaseMemory();
 }
