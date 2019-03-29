@@ -43,7 +43,6 @@ template<bool normalizeTexel>__global__ void floatHeighmapTextureToNormalmap(con
 	float x = 0, y = 0, z = 0;
 
 	z = 0.5;
-
 	unsigned int offset = col + row * (dstPitch / 3);
 	
 	for (unsigned int i = 0; i < 3; i++) {
@@ -68,7 +67,6 @@ template<bool normalizeTexel>__global__ void floatHeighmapTextureToNormalmap(con
 	rgbTexel.x = (x + 1) * 127.5;
 	rgbTexel.y = (y + 1) * 127.5;
 	rgbTexel.z = z * 255;
-	//printf("%u, %u, %u \n", texel.x, texel.y, texel.z);
 
 	bgrTexel.x = rgbTexel.z;
 	bgrTexel.y = rgbTexel.y;
