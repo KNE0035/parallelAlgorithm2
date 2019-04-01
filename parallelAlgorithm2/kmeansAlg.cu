@@ -55,3 +55,16 @@ int main(int argc, char *argv[])
 	createSrcTexure(points, length);
 	
 }
+
+//postup:
+//1. na hostu shuffle pole bodu (mozna na device? jde paralelizovat?)
+//2. zavolat kernel pro vypocet kmeans
+	//2.1 vybrat k centroidu
+	//2.2 spocitat matici vzdalenosti od centroidú (rozradit body k nejblizsim centroidúm (vznik skupin))
+	//2.3 prepocitat centroidy (teziste bodu v dane skupine s centroidem)
+	//2.4 spocitat matici vzdalenosti od novych centroidú (rozradit body k nejblizsim centroidúm (vznik skupin))
+	//2.5 porovnat mnoziny bodú if stejne: pokracuj else: -> 2.3
+	//2.6 vypocitat sum of squares pres vsechny skupiny a ulozit do vystupu
+//3. Pokud pocet volani kernelu pro vypocet kmeans < nOIterations ? -> 2. (hlidat si vysledek s nejmensim sum of squares)
+//4. vypsat skupiny bodu
+
