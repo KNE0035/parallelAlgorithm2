@@ -12,7 +12,7 @@
 cudaError_t error = cudaSuccess;
 cudaDeviceProp deviceProp = cudaDeviceProp();
 
-texture<float, 2, cudaReadModeElementType> texRef;
+texture<float, cudaTextureType2D, cudaReadModeElementType> texRef;
 cudaChannelFormatDesc texChannelDesc;
 
 unsigned char *dImageData = 0;
@@ -40,38 +40,31 @@ template<bool normalizeTexel>__global__ void floatHeighmapTextureToNormalmap(con
 	unsigned int col = (threadIdx.x + blockIdx.x * blockDim.x);
 	unsigned int row = (threadIdx.y + blockIdx.y * blockDim.y);
 
-	float x = 0, y = 0, z = 0;
-
-	z = 0.5;
+	float3 floatTexel;
+	floatTexel.z = 0.5;
 	unsigned int offset = col + row * (dstPitch / 3);
 	
-	for (unsigned int i = 0; i < 3; i++) {
-		for (unsigned int j = 0; j < 3; j++) {
+	for (int i = 0; i < 3; i++) {
+		for (int j = 0; j < 3; j++) {
 			float texel = tex2D(texRef, col + (j - 1), row + (i - 1));
-			x += texel * SOBEL_X_FILTER[j + i * 3];
-			y += texel * SOBEL_Y_FILTER[j + i * 3];
+			floatTexel.x += texel * SOBEL_X_FILTER[j + i * 3];
+			floatTexel.y += texel * SOBEL_Y_FILTER[j + i * 3];
 		}
 	}
-	x = x / 9;
-	y = y / 9;
  
 	if (normalizeTexel) {
-		float distance = sqrt(x * x + y * y + z * z);
-		x /= distance;
-		y /= distance;
-		z /= distance;
+		floatTexel = normalize(floatTexel);
 	}
 
 	uchar3 rgbTexel;
 	uchar3 bgrTexel;
-	rgbTexel.x = (x + 1) * 127.5;
-	rgbTexel.y = (y + 1) * 127.5;
-	rgbTexel.z = z * 255;
+	rgbTexel.x = (floatTexel.x + 1) * 127.5;
+	rgbTexel.y = (floatTexel.y + 1) * 127.5;
+	rgbTexel.z = floatTexel.z * 255;
 
 	bgrTexel.x = rgbTexel.z;
 	bgrTexel.y = rgbTexel.y;
 	bgrTexel.z = rgbTexel.x;
-
 	dst[offset] = rgbTexel;
 }
 
@@ -125,8 +118,8 @@ void createSrcTexure()
 	texChannelDesc = cudaCreateChannelDesc(32, 0, 0, 0, cudaChannelFormatKindFloat);
 	texRef.normalized = false;
 	texRef.filterMode = cudaFilterModePoint;
-	texRef.addressMode[0] = cudaAddressModeClamp;
-	texRef.addressMode[1] = cudaAddressModeClamp;
+	texRef.addressMode[0] = cudaAddressModeWrap;
+	texRef.addressMode[1] = cudaAddressModeWrap;
 
 	cudaBindTexture2D(0, &texRef, dLinearPitchTextureData, &texChannelDesc, imageWidth, imageHeight, texPitch);
 }
@@ -138,13 +131,8 @@ void createSrcTexure()
 
 void createNormalMap()
 {
-	size_t pitch;
-	//TODO: Allocate Pitch memory dstTexData to store output texture
 	checkCudaErrors(cudaMallocPitch((void**)&dstTexData, &texPitch, imageWidth * 3, imageHeight));
-
-	//TODO: Call the kernel that creates the normal map.
 	floatHeighmapTextureToNormalmap<true> << <squareKs.dimGrid, squareKs.dimBlock>> >(imageWidth, imageHeight, texPitch, dstTexData);
-
 	//check_data<uchar3>::checkDeviceMatrix(dstTexData, imageHeight, texPitch / sizeof(uchar3), true, "%hhu %hhu %hhu | ", "Result of Linear Pitch Text");
 }
 
