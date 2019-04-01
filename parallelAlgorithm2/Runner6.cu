@@ -52,9 +52,7 @@ template<bool normalizeTexel>__global__ void floatHeighmapTextureToNormalmap(con
 		}
 	}
  
-	if (normalizeTexel) {
-		floatTexel = normalize(floatTexel);
-	}
+	floatTexel = normalize(floatTexel);
 
 	uchar3 rgbTexel;
 	uchar3 bgrTexel;
