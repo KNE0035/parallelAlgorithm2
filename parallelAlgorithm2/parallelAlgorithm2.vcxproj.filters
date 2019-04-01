@@ -5,6 +5,7 @@
     <CudaCompile Include="Runner2.cu" />
     <CudaCompile Include="Runner3.cu" />
     <CudaCompile Include="Runner6.cu" />
+    <CudaCompile Include="kmeansAlg.cu" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="main.cpp" />
