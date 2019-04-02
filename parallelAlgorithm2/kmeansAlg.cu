@@ -10,6 +10,9 @@ cudaDeviceProp deviceProp = cudaDeviceProp();
 using namespace std;
 
 texture<float3, cudaTextureType1D, cudaReadModeElementType> pointTex;
+KernelSetting kmeansKernelSettings;
+
+#define BLOCK_DIM 8
 
 __host__ float3* createPointsData(const unsigned int length)
 {
@@ -36,6 +39,10 @@ void printData(const float3 *data, const unsigned int length)
 	}
 }
 
+__global__ void kMeansKernel(const int lenght, float3** pointGroups, float* sumOfSquares)
+{
+}
+
 void createSrcTexure(float3* points, const unsigned int length) {
 	cudaChannelFormatDesc texChannelDesc;
 	
@@ -49,11 +56,36 @@ void createSrcTexure(float3* points, const unsigned int length) {
 int main(int argc, char *argv[])
 {
 	const unsigned int length = 10;
+	const unsigned int nOIterations = 100;
+	const unsigned k = 10;
+
 	initializeCUDA(deviceProp);
+	float3** dPointGroupsResult;
+	float minimumSumOfSquares = FLT_MAX;
+	float* dSumOfSquares;
+	float hSumOfSquares;
 	float3* points = createPointsData(length);
+
+
 	printData(points, length);
 	createSrcTexure(points, length);
 	
+	cudaMalloc(&dSumOfSquares, sizeof(float));
+
+	for (unsigned int i = 0; i < nOIterations; i++) {
+		kmeansKernelSettings.dimBlock = dim3(BLOCK_DIM, 1, 1);
+		kmeansKernelSettings.blockSize = BLOCK_DIM;
+		kmeansKernelSettings.dimGrid = dim3((length + BLOCK_DIM - 1) / BLOCK_DIM, 1, 1);
+		
+		kMeansKernel << <kmeansKernelSettings.dimGrid, kmeansKernelSettings.dimBlock >> > (length, dPointGroupsResult, sumOfSquares);
+		cudaMemcpy(&hSumOfSquares, dSumOfSquares, sizeof(float), cudaMemcpyDeviceToHost);
+
+		if (minimumSumOfSquares > hSumOfSquares) {
+			minimumSumOfSquares = hSumOfSquares;
+
+		}
+
+	}
 }
 
 //postup:

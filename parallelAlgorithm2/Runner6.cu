@@ -27,7 +27,7 @@ cudaArray *dArrayTextureData = 0;
 
 uchar3 *dstTexData;
 
-KernelSetting squareKs;;
+KernelSetting squareKs;
 
 float *dOutputData = 0;
 
