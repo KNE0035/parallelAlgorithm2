@@ -60,7 +60,13 @@ __global__ void applyFilter(const unsigned char someValue, const unsigned int pb
 	unsigned int col = (threadIdx.x + blockIdx.x * blockDim.x);
 	unsigned int row = (threadIdx.y + blockIdx.y * blockDim.y);
 
-	unsigned int offset = col + row * (pboWidth / 3);
+	unsigned int offset = col + row * pboWidth;
+	uchar4 texel = tex2D(cudaTexRef, col, row);
+
+	texel.x = someValue;
+	uchar4* uchar4pbo = (uchar4*)pbo;
+
+	uchar4pbo[offset] = texel;
 }
 
 void cudaWorker()
@@ -264,7 +270,7 @@ int main(int argc, char *argv[])
 
 	initGL(argc, argv);
 
-	loadTexture("d:/lena.png");
+	loadTexture("C:/Users/kne0035/dev/projects/parallelAlgorithm2/parallelAlgorithm2/images/lena.png");
 
 	preparePBO();
 
