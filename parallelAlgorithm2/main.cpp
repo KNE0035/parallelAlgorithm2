@@ -7,5 +7,5 @@ int main(int argc, char *argv[])
 	//testAdding2Vectors();
 	//testAddingNVectors();
 	//createMatrixOnDevice(10, 10);
-	particleSystemSimulation();
+	main();
 }

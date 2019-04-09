@@ -1,6 +1,6 @@
 #ifndef RUNNER3
 #define RUNNER3
 
-int particleSystemSimulation();
+int main();
 
 #endif // !RUNNER3

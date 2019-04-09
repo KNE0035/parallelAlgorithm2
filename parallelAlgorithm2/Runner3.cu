@@ -116,7 +116,7 @@ __global__ void add(const float3* __restrict__ dFinalForce, const unsigned int n
 }
 
 
-int particleSystemSimulation()
+int main()
 {
 	initializeCUDA(deviceProp);
 

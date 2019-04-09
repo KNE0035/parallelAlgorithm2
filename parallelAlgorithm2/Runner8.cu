@@ -270,7 +270,7 @@ int main(int argc, char *argv[])
 
 	initGL(argc, argv);
 
-	loadTexture("C:/Users/kne0035/dev/projects/parallelAlgorithm2/parallelAlgorithm2/images/lena.png");
+	loadTexture("C:/Users/kne0035/dev/parallelAlgorithm2/parallelAlgorithm2/images/lena.png");
 
 	preparePBO();
 
