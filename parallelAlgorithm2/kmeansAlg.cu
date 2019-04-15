@@ -62,19 +62,21 @@ void printResult(const ClusteredPoint *points, const unsigned int length)
 	}
 }
 
-__global__ void kMeansKernel(const unsigned int lenght, const unsigned int k, float3* centroids, unsigned int* clusterLengthArray, ClusteredPoint* clusteredPointsLastNew, float* sumOfSquares)
+__global__ void kMeansKernel(const unsigned int length, const unsigned int k, float3* centroids, unsigned int* clusterLengthArray, ClusteredPoint* clusteredPointsLastNew, float* sumOfSquares)
 {
 	unsigned int idx = (threadIdx.x + blockIdx.x * blockDim.x);
 
+	distributePointToCluster(idx, centroids, k, clusteredPointsLastNew, 0);
+	__syncthreads();
 	do {
-		distributePointToCluster(idx, centroids, k, clusteredPointsLastNew, 0);
+		clusteredPointsLastNew[idx] = clusteredPointsLastNew[length + idx];
 		__syncthreads();
-		recalculateCentroids(idx, centroids, clusterLengthArray, k, clusteredPointsLastNew, lenght);
+		recalculateCentroids(idx, centroids, clusterLengthArray, k, clusteredPointsLastNew, length);
 		__syncthreads();
-		distributePointToCluster(idx, centroids, k, clusteredPointsLastNew, lenght);
+		distributePointToCluster(idx, centroids, k, clusteredPointsLastNew, length);
 		isIdentic = true;
 		__syncthreads();
-	} while (!isLastAndNewClusteredPointsIdentic(idx, clusteredPointsLastNew, lenght));
+	} while (!isLastAndNewClusteredPointsIdentic(idx, clusteredPointsLastNew, length));
 }
 
 /*void createSrcTexure(float3* points, const unsigned int length) {
@@ -92,7 +94,7 @@ __global__ void kMeansKernel(const unsigned int lenght, const unsigned int k, fl
 
 int main(int argc, char *argv[])
 {
-	const unsigned int length = 10000000;
+	const unsigned int length = 100;
 	const unsigned k = 5;
 
 	initializeCUDA(deviceProp);
@@ -138,8 +140,8 @@ ClusteredPoint* calculateKMeans(float3* points, const unsigned int k, const unsi
 
 	kMeansKernel << <kmeansKernelSettings.dimGrid, kmeansKernelSettings.dimBlock >> > (length, k, dCentroids, dClusterLengthArray, dClusteredPointsLastNew, dSumOfSquares);
 	//gpuErrorCheck(cudaMemcpy(&hSumOfSquares, dSumOfSquares, sizeof(float), cudaMemcpyDeviceToHost));
-	gpuErrorCheck(cudaMemcpy(hclusteredPoints, dClusteredPointsLastNew, length * sizeof(ClusteredPoint), cudaMemcpyDeviceToHost));
 	gpuErrorCheck(cudaDeviceSynchronize());
+	gpuErrorCheck(cudaMemcpy(hclusteredPoints, dClusteredPointsLastNew, length * sizeof(ClusteredPoint), cudaMemcpyDeviceToHost));
 
 	return hclusteredPoints;
 }
@@ -179,7 +181,7 @@ __device__ void distributePointToCluster(unsigned int idx, float3* centroids, co
 
 __device__ void recalculateCentroids(unsigned int idx, float3* centroids, unsigned int* clusterLengthArray, const unsigned int k, ClusteredPoint* clusteredPoints, unsigned int length) {
 	
-	if (idx > 0) {
+	/*if (idx > 0) {
 		return;
 	}
 
@@ -195,9 +197,25 @@ __device__ void recalculateCentroids(unsigned int idx, float3* centroids, unsign
 	
 	for (int i = 0; i < k; i++) {
 		centroids[i] = centroids[i] / clusterLengthArray[i];
+	}*/
+
+
+	if (idx < k) {
+		centroids[idx] = make_float3(0.0f, 0.0f, 0.0f);
+		clusterLengthArray[idx] = 0;
 	}
+	__syncthreads();
 
+	atomicAdd(&centroids[clusteredPoints[idx].cluster].x, clusteredPoints[idx].point.x);
+	atomicAdd(&centroids[clusteredPoints[idx].cluster].y, clusteredPoints[idx].point.y);
+	atomicAdd(&centroids[clusteredPoints[idx].cluster].z, clusteredPoints[idx].point.z);
 
+	atomicAdd(&clusterLengthArray[clusteredPoints[idx].cluster], 1);
+	__syncthreads();
+
+	if (idx < k) {
+		centroids[idx] = centroids[idx] / clusterLengthArray[idx];
+	}
 }
 
 __device__ bool isLastAndNewClusteredPointsIdentic(unsigned int idx, ClusteredPoint* clusteredPointsLastNew, const unsigned int lenght) {
