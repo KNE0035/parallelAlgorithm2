@@ -12,7 +12,7 @@ struct ClusteredPoint {
 
 __device__ void distributePointToCluster(unsigned int idx, float3* centroids, const unsigned int k, ClusteredPoint* clusteredPointsLastNew, const unsigned int pointsLastNewOffset);
 __device__ void recalculateCentroids(unsigned int idx, float3* centroids, unsigned int* clusterLengthArray, const unsigned int k, ClusteredPoint* clusteredPointsLastNew, unsigned int length);
-__device__ bool isLastAndNewClusteredPointsIdentic(unsigned int idx, ClusteredPoint* clusteredPointsLastNew, const unsigned int lenght);
+__device__ bool isLastAndNewClusteredPointsIdentic(unsigned int idx, ClusteredPoint* clusteredPointsLastNew, const unsigned int length);
 
 __device__ bool isIdentic = true;
 
@@ -70,8 +70,6 @@ __global__ void kMeansKernel(const unsigned int length, const unsigned int k, fl
 	distributePointToCluster(idx, centroids, k, clusteredPointsLastNew, 0);
 	__syncthreads();
 	do {
-		clusteredPointsLastNew[idx] = clusteredPointsLastNew[length + idx];
-		__syncthreads();
 		recalculateCentroids(idx, centroids, clusterLengthArray, k, clusteredPointsLastNew, length);
 		__syncthreads();
 		distributePointToCluster(idx, centroids, k, clusteredPointsLastNew, length);
@@ -95,8 +93,8 @@ __global__ void kMeansKernel(const unsigned int length, const unsigned int k, fl
 
 int main(int argc, char *argv[])
 {
-	const unsigned int length = 100;
-	const unsigned k = 5;
+	const unsigned int length = 5;
+	const unsigned k = 3;
 
 	initializeCUDA(deviceProp);
 	float3 pos[] = { make_float3(0,1,4),
@@ -183,6 +181,7 @@ __device__ void distributePointToCluster(unsigned int idx, float3* centroids, co
 
 	clusteredPoints[idx + pointOffset].point = point;
 	clusteredPoints[idx + pointOffset].cluster = minDistanceCentroidNumber;
+	//printf("dist: %d", minDistanceCentroidNumber);
 }
 
 __device__ void recalculateCentroids(unsigned int idx, float3* centroids, unsigned int* clusterLengthArray, const unsigned int k, ClusteredPoint* clusteredPoints, unsigned int length) {
@@ -224,11 +223,15 @@ __device__ void recalculateCentroids(unsigned int idx, float3* centroids, unsign
 	}*/
 }
 
-__device__ bool isLastAndNewClusteredPointsIdentic(unsigned int idx, ClusteredPoint* clusteredPointsLastNew, const unsigned int lenght) {
+__device__ bool isLastAndNewClusteredPointsIdentic(unsigned int idx, ClusteredPoint* clusteredPointsLastNew, const unsigned int length) {
 
-	if (clusteredPointsLastNew[idx].cluster != clusteredPointsLastNew[idx + lenght].cluster) {
+	if (clusteredPointsLastNew[idx].cluster != clusteredPointsLastNew[idx + length].cluster) {
 		isIdentic = false;
+
+		//printf("%d : %d \n", clusteredPointsLastNew[idx].cluster, clusteredPointsLastNew[idx + lenght].cluster);
 	}
+
+	clusteredPointsLastNew[idx] = clusteredPointsLastNew[length + idx];
 	__syncthreads();
 	return isIdentic;
 }
