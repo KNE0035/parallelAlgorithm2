@@ -56,9 +56,10 @@ void printData(const float3 *data, const unsigned int length)
 void printResult(const ClusteredPoint *points, const unsigned int length)
 {
 	printf("result: \n");
-	for (unsigned int i = 0; i < length; i++)
+	for (unsigned int i =0; i < length; i++)
 	{
-		printf("%5.2f %5.2f %5.2f, cluster: %d \n", points[i].point.x, points[i].point.y, points[i].point.z, points[i].cluster);
+		float vectorSize = sqrtf(dot(points[i].point, points[i].point));
+		printf("%5.2f %5.2f %5.2f, cluster: %d (vectorSize: %f)\n", points[i].point.x, points[i].point.y, points[i].point.z, points[i].cluster, vectorSize);
 	}
 }
 
@@ -180,15 +181,13 @@ __device__ void distributePointToCluster(unsigned int idx, float3* centroids, co
 		}
 	}
 
-	ClusteredPoint clusteredPoint;
-	clusteredPoint.point = point;
-	clusteredPoint.cluster = minDistanceCentroidNumber;
-	clusteredPoints[idx + pointOffset] = clusteredPoint;
+	clusteredPoints[idx + pointOffset].point = point;
+	clusteredPoints[idx + pointOffset].cluster = minDistanceCentroidNumber;
 }
 
 __device__ void recalculateCentroids(unsigned int idx, float3* centroids, unsigned int* clusterLengthArray, const unsigned int k, ClusteredPoint* clusteredPoints, unsigned int length) {
 	
-	/*if (idx > 0) {
+	if (idx > 0) {
 		return;
 	}
 
@@ -204,25 +203,25 @@ __device__ void recalculateCentroids(unsigned int idx, float3* centroids, unsign
 	
 	for (int i = 0; i < k; i++) {
 		centroids[i] = centroids[i] / clusterLengthArray[i];
-	}*/
+	}
 
 
-	if (idx < k) {
+	/*if (idx < k) {
 		centroids[idx] = make_float3(0.0f, 0.0f, 0.0f);
 		clusterLengthArray[idx] = 0;
 	}
 	__syncthreads();
 
-	atomicAdd(&centroids[clusteredPoints[idx].cluster].x, clusteredPoints[idx].point.x);
-	atomicAdd(&centroids[clusteredPoints[idx].cluster].y, clusteredPoints[idx].point.y);
-	atomicAdd(&centroids[clusteredPoints[idx].cluster].z, clusteredPoints[idx].point.z);
+	atomicAdd(&(centroids[clusteredPoints[idx].cluster].x), clusteredPoints[idx].point.x);
+	atomicAdd(&(centroids[clusteredPoints[idx].cluster].y), clusteredPoints[idx].point.y);
+	atomicAdd(&(centroids[clusteredPoints[idx].cluster].z), clusteredPoints[idx].point.z);
 
 	atomicAdd(&clusterLengthArray[clusteredPoints[idx].cluster], 1);
 	__syncthreads();
 
 	if (idx < k) {
 		centroids[idx] = centroids[idx] / clusterLengthArray[idx];
-	}
+	}*/
 }
 
 __device__ bool isLastAndNewClusteredPointsIdentic(unsigned int idx, ClusteredPoint* clusteredPointsLastNew, const unsigned int lenght) {
