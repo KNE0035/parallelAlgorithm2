@@ -98,14 +98,21 @@ int main(int argc, char *argv[])
 	const unsigned k = 5;
 
 	initializeCUDA(deviceProp);
+	float3 pos[] = { make_float3(0,1,4),
+					 make_float3(0,2,6) ,
+					 make_float3(5,1,1) ,
+					 make_float3(7,3,4) ,
+					 make_float3(70,31, 42) 
+					};
+	
 	float3* points = createPointsData(length);
 	ClusteredPoint* result;
 
 	//printData(points, length);
 	cout << endl;
 
-	result = calculateKMeans(points, k, length);
-	//printResult(result, length);
+	result = calculateKMeans(pos, k, length);
+	printResult(result, length);
 }
 
 ClusteredPoint* calculateKMeans(float3* points, const unsigned int k, const unsigned int length) {
