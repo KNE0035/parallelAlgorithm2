@@ -223,7 +223,8 @@ __device__ void recalculateCentroids(unsigned int idx, float3* centroids, unsign
 	}*/
 }
 
-__device__ bool isLastAndNewClusteredPointsIdentic(unsigned int idx, ClusteredPoint* clusteredPointsLastNew, const unsigned int length) {
+__device__ bool isLastAndNewClusteredPointsIdentic(unsigned int idx, ClusteredPoint* clusteredPointsLastNew, const unsigned int length) {
+
 
 	if (clusteredPointsLastNew[idx].cluster != clusteredPointsLastNew[idx + length].cluster) {
 		isIdentic = false;
