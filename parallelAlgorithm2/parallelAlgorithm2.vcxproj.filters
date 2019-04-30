@@ -9,6 +9,7 @@
     <CudaCompile Include="Runner8.cu" />
     <CudaCompile Include="Runner9.cu" />
     <CudaCompile Include="Runner10.cu" />
+    <CudaCompile Include="Runner11.cu" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="main.cpp" />
