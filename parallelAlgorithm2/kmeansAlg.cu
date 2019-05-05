@@ -75,9 +75,7 @@ __global__ void kMeansIsGroupsIdentic(const unsigned int length, ClusteredPoint*
 		return;
 	}
 	if (dClusteredPointsPrev[idx].cluster != dClusteredPointsNext[idx].cluster) {
-		if (*identic) {
-			*identic = false;
-		}
+		*identic = false;
 	}
 }
 
